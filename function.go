@@ -22,7 +22,6 @@ import (
 
 // Define the context
 var fireDB FireDB
-var Memory []*genai.Content
 
 // LINE BOt sdk
 var bot *messaging_api.MessagingApiAPI
@@ -88,17 +87,17 @@ func HelloHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var InMemory []GeminiChat
-
-	err = fireDB.NewRef("BwAI").Get(ctx, &InMemory)
+	var Memory []*genai.Content
+	var DbData []GeminiChat
+	err = fireDB.NewRef("BwAI").Get(ctx, &DbData)
 	if err != nil {
 		fmt.Println("load memory failed, ", err)
 	}
 
-	fmt.Println("InMemory: %v", InMemory)
+	fmt.Println("InMemory: %v", DbData)
 
 	// convert InMemory to Memory
-	for _, c := range InMemory {
+	for _, c := range DbData {
 		parts := make([]genai.Part, len(c.Parts))
 		for i, part := range c.Parts {
 			parts[i] = genai.Text(part)
