@@ -94,8 +94,6 @@ func HelloHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("load memory failed, ", err)
 	}
 
-	fmt.Println("InMemory: %v", DbData)
-
 	// convert InMemory to Memory
 	for _, c := range DbData {
 		parts := make([]genai.Part, len(c.Parts))
