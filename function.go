@@ -2,6 +2,7 @@ package helloworld
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -87,27 +88,6 @@ func HelloHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var Memory []*genai.Content
-	var DbData []GeminiChat
-	err = fireDB.NewRef("BwAI").Get(ctx, &DbData)
-	if err != nil {
-		fmt.Println("load memory failed, ", err)
-	}
-
-	// convert InMemory to Memory
-	for _, c := range DbData {
-		parts := make([]genai.Part, len(c.Parts))
-		for i, part := range c.Parts {
-			parts[i] = genai.Text(part)
-		}
-		dst := &genai.Content{
-			Parts: parts,
-			Role:  c.Role,
-		}
-
-		Memory = append(Memory, dst)
-	}
-
 	for _, event := range cb.Events {
 		log.Printf("Got event %v", event)
 		switch e := event.(type) {
@@ -118,6 +98,28 @@ func HelloHTTP(w http.ResponseWriter, r *http.Request) {
 			case webhook.TextMessageContent:
 				req := message.Text
 
+				// Get the conversation from the firebase
+				var Memory []*genai.Content
+				var DbData []GeminiChat
+				err = fireDB.NewRef("BwAI").Get(ctx, &DbData)
+				if err != nil {
+					fmt.Println("load memory failed, ", err)
+				}
+
+				// convert InMemory to Memory
+				for _, c := range DbData {
+					parts := make([]genai.Part, len(c.Parts))
+					for i, part := range c.Parts {
+						parts[i] = genai.Text(part)
+					}
+					dst := &genai.Content{
+						Parts: parts,
+						Role:  c.Role,
+					}
+
+					Memory = append(Memory, dst)
+				}
+
 				ctx := context.Background()
 				client, err := genai.NewClient(ctx, option.WithAPIKey(geminiKey))
 				if err != nil {
@@ -127,13 +129,28 @@ func HelloHTTP(w http.ResponseWriter, r *http.Request) {
 
 				// Pass the text content to the gemini-pro model for text generation
 				model := client.GenerativeModel("gemini-pro")
-				cs := model.StartChat()
-				cs.History = Memory
 
-				res, err := cs.SendMessage(ctx, genai.Text(req))
+				//workaround for the issue unknown field "usageMetadata" in googleapi.
+
+				//get json from DbData
+				var jsonStr []byte
+				jsonStr, err = json.Marshal(DbData)
+				if err != nil {
+					fmt.Println("json marshal failed, ", err)
+				}
+
+				totalString := fmt.Sprintf("Memory:(%s), %s", string(jsonStr), req)
+				res, err := model.GenerateContent(ctx, genai.Text(totalString))
 				if err != nil {
 					log.Fatal(err)
 				}
+
+				// cs := model.StartChat()
+				// cs.History = Memory
+				// res, err := cs.SendMessage(ctx, genai.Text(req))
+				// if err != nil {
+				// 	log.Fatal(err)
+				// }
 				var ret string
 				for _, cand := range res.Candidates {
 					for _, part := range cand.Content.Parts {
